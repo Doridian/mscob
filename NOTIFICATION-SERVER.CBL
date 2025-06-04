@@ -26,6 +26,8 @@ WORKING-STORAGE SECTION.
 01 CR PIC X(1) VALUE x'0D'.
 01 LF PIC X(1) VALUE x'0A'.
 
+*> Probably use CBL_GC_FORK to fork a listener for status updates after auth is completed
+
 PROCEDURE DIVISION.
 Main.
     MOVE 1 TO connection-state.
