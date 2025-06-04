@@ -8,9 +8,15 @@ WORKING-STORAGE SECTION.
 01 NL PIC X VALUE x'0A'.
 
 01 receive-buffer PIC X(65536).
+01 receive-buffer-array REDEFINES receive-buffer.
+    05 receive-buffer-char OCCURS 65536 TIMES PIC X.
 01 receive-len BINARY-LONG UNSIGNED.
+01 receive-ptr PIC 9(8).
 
 01 response-buffer PIC X(65536).
+01 response-buffer-array REDEFINES response-buffer.
+    05 response-buffer-char OCCURS 65536 TIMES PIC X.
+01 response-len BINARY-LONG UNSIGNED.
 
 01 receive-command PIC X(64).
 01 receive-txn PIC Z(3)9.
@@ -25,23 +31,59 @@ WORKING-STORAGE SECTION.
 
 01 CR PIC X(1) VALUE x'0D'.
 01 LF PIC X(1) VALUE x'0A'.
+01 NUL PIC X(1) VALUE x'00'.
+01 stdin POINTER.
 
 *> Probably use CBL_GC_FORK to fork a listener for status updates after auth is completed
 *> PostgreSQL LISTEN?
 
 PROCEDURE DIVISION.
 Main.
-    MOVE 1 TO connection-state.
+    CALL 'get_file' USING
+        BY VALUE 0 *> stdin
+        GIVING stdin
+    END-CALL
+
+    MOVE 1 TO connection-state
     PERFORM READ-COMMAND THRU READ-COMMAND-EXIT UNTIL connection-state = 0
-    STOP RUN.
+    STOP RUN
+    .
 
 Read-Command.
     MOVE 1 TO receive-trailer-idx
-    ACCEPT receive-buffer
-    MOVE FUNCTION TRIM(receive-buffer) TO receive-buffer
-    MOVE FUNCTION LENGTH(FUNCTION TRIM(receive-buffer TRAILING)) TO receive-len
-    UNSTRING receive-buffer DELIMITED BY SPACE
-        INTO receive-command, receive-txn
+
+    CALL 'fgets' USING
+        BY REFERENCE receive-buffer
+        BY VALUE 65536
+        BY VALUE stdin
+        GIVING receive-ptr
+    END-CALL
+
+    IF receive-ptr = 0
+        GO TO READ-COMMAND-ERROR
+    END-IF
+
+    MOVE 0 TO receive-len
+    INSPECT receive-buffer TALLYING receive-len FOR CHARACTERS BEFORE INITIAL NUL
+
+    PERFORM WITH TEST BEFORE UNTIL
+            receive-len < 1 OR (
+                receive-buffer-char(receive-len) NOT = CR AND
+                receive-buffer-char(receive-len) NOT = LF AND
+                receive-buffer-char(receive-len) NOT = " "
+            )
+        MOVE NUL TO receive-buffer-char(receive-len)
+        SUBTRACT 1 FROM receive-len
+    END-PERFORM
+
+    IF receive-len < 1 THEN
+        GO TO READ-COMMAND-EXIT
+    END-IF
+
+    UNSTRING receive-buffer(1:receive-len) DELIMITED BY SPACE
+        INTO
+            receive-command,
+            receive-txn
         WITH POINTER receive-trailer-idx
     END-UNSTRING
 
@@ -50,8 +92,9 @@ Read-Command.
 
     EVALUATE TRUE
         WHEN receive-command = "VER"
+            *> VER 0 MSNP8 CVR5
             PERFORM UNTIL receive-trailer-idx > receive-len
-                UNSTRING receive-buffer DELIMITED BY SPACE
+                UNSTRING receive-buffer(1:receive-len) DELIMITED BY SPACE
                     INTO receive-param
                     WITH POINTER receive-trailer-idx
                 END-UNSTRING
@@ -70,11 +113,11 @@ Read-Command.
 
             *> We can't support MSNP > 7 as it requires passport auth
             *> Which uses MSFT servers hardcoded in the client
-            IF msnp-version > 7
+            IF FUNCTION NUMVAL(msnp-version) > 7
                 MOVE 7 TO msnp-version
             END-IF
 
-            IF cvr-version > 0
+            IF FUNCTION NUMVAL(cvr-version) > 0
                 MOVE 0 TO cvr-version
             END-IF
 
@@ -90,22 +133,42 @@ Read-Command.
         WHEN receive-command = "CVR"
             MOVE "1.0.0000 1.0.0000 1.0.0000 https://doridian.net https://doridian.net" TO response-buffer
 
-        *> Error cases
-        WHEN receive-command = SPACES
-            GO TO READ-COMMAND-ERROR
+        WHEN receive-command = "TST"
+            CALL 'fread' USING
+                BY REFERENCE response-buffer
+                BY VALUE 1
+                BY VALUE 16
+                BY VALUE stdin
+                GIVING response-len
+            END-CALL
+
+            MOVE SPACES TO response-buffer(response-len:)
+
+            DISPLAY "Got " response-len " chars"
+            GO TO READ-COMMAND-EXIT
+
         WHEN OTHER
-            DISPLAY "Invalid command " FUNCTION TRIM(receive-command)
+            STRING
+                "Invalid command '"
+                FUNCTION TRIM(receive-command)
+                "'"
+                    DELIMITED BY SIZE
+                INTO response-buffer
+            END-STRING
+            MOVE "200" TO receive-command
             GO TO READ-COMMAND-ERROR
     END-EVALUATE
     .
 
-Read-Command-Exit.
+Read-Command-Respond.
     DISPLAY FUNCTION TRIM(receive-command) " " FUNCTION TRIM(receive-txn) " " FUNCTION TRIM(response-buffer) CR
     .
+
+Read-Command-Exit.
 
 Read-Command-Error.
     MOVE 0 TO connection-state
     IF response-buffer NOT = SPACES
-        GO TO READ-COMMAND-EXIT
+        GO TO READ-COMMAND-RESPOND
     END-IF
     .
