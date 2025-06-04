@@ -65,8 +65,10 @@ Read-Command.
                 GO TO READ-COMMAND-ERROR
             END-IF
 
-            IF msnp-version > 8
-                MOVE 8 TO msnp-version
+            *> We can't support MSNP > 7 as it requires passport auth
+            *> Which uses MSFT servers hardcoded in the client
+            IF msnp-version > 7
+                MOVE 7 TO msnp-version
             END-IF
 
             IF cvr-version > 0
