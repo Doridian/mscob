@@ -18,8 +18,6 @@ WORKING-STORAGE SECTION.
 
 01 receive-param PIC X(256).
 
-01 program-running PIC 9(1) VALUE 1.
-
 01 msnp-version PIC Z(3)9 VALUE 9999.
 01 cvr-version PIC Z(3)9 VALUE 9999.
 
@@ -30,8 +28,8 @@ WORKING-STORAGE SECTION.
 
 PROCEDURE DIVISION.
 NS-Main.
-    MOVE 0 TO connection-state.
-    PERFORM NS-READ-COMMAND THRU NS-READ-COMMAND-EXIT UNTIL program-running = 0
+    MOVE 1 TO connection-state.
+    PERFORM NS-READ-COMMAND THRU NS-READ-COMMAND-EXIT UNTIL connection-state = 0
     STOP RUN.
 
 NS-Read-Command.
@@ -89,7 +87,7 @@ NS-Read-Command.
 
         *> Error cases
         WHEN receive-command = SPACES
-            MOVE 0 TO program-running
+            GO TO NS-READ-COMMAND-ERROR
         WHEN OTHER
             DISPLAY "Invalid command " FUNCTION TRIM(receive-command)
             GO TO NS-READ-COMMAND-ERROR
@@ -101,7 +99,7 @@ NS-Read-Command-Exit.
     .
 
 NS-Read-Command-Error.
-    MOVE 0 TO program-running
+    MOVE 0 TO connection-state
     IF response-buffer NOT = SPACES
         GO TO NS-READ-COMMAND-EXIT
     END-IF
