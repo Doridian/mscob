@@ -27,12 +27,12 @@ WORKING-STORAGE SECTION.
 01 LF PIC X(1) VALUE x'0A'.
 
 PROCEDURE DIVISION.
-NS-Main.
+Main.
     MOVE 1 TO connection-state.
-    PERFORM NS-READ-COMMAND THRU NS-READ-COMMAND-EXIT UNTIL connection-state = 0
+    PERFORM READ-COMMAND THRU READ-COMMAND-EXIT UNTIL connection-state = 0
     STOP RUN.
 
-NS-Read-Command.
+Read-Command.
     MOVE 1 TO receive-trailer-idx
     ACCEPT receive-buffer
     MOVE FUNCTION TRIM(receive-buffer) TO receive-buffer
@@ -62,7 +62,7 @@ NS-Read-Command.
 
             IF msnp-version = 9999 OR cvr-version = 9999
                 MOVE "0" TO response-buffer
-                GO TO NS-READ-COMMAND-ERROR
+                GO TO READ-COMMAND-ERROR
             END-IF
 
             IF msnp-version > 8
@@ -87,20 +87,20 @@ NS-Read-Command.
 
         *> Error cases
         WHEN receive-command = SPACES
-            GO TO NS-READ-COMMAND-ERROR
+            GO TO READ-COMMAND-ERROR
         WHEN OTHER
             DISPLAY "Invalid command " FUNCTION TRIM(receive-command)
-            GO TO NS-READ-COMMAND-ERROR
+            GO TO READ-COMMAND-ERROR
     END-EVALUATE
     .
 
-NS-Read-Command-Exit.
+Read-Command-Exit.
     DISPLAY FUNCTION TRIM(receive-command) " " FUNCTION TRIM(receive-txn) " " FUNCTION TRIM(response-buffer) CR
     .
 
-NS-Read-Command-Error.
+Read-Command-Error.
     MOVE 0 TO connection-state
     IF response-buffer NOT = SPACES
-        GO TO NS-READ-COMMAND-EXIT
+        GO TO READ-COMMAND-EXIT
     END-IF
     .
