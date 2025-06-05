@@ -5,8 +5,6 @@ PROGRAM-ID. NOTIFICATION-SERVER.
 DATA DIVISION.
 WORKING-STORAGE SECTION.
 
-01 NL PIC X VALUE x'0A'.
-
 01 receive-buffer PIC X(65536).
 01 receive-buffer-array REDEFINES receive-buffer.
     05 receive-buffer-char OCCURS 65536 TIMES PIC X.
