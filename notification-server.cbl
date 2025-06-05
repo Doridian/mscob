@@ -161,7 +161,11 @@ Read-Command.
     .
 
 Read-Command-Respond.
-    DISPLAY FUNCTION TRIM(receive-command) " " FUNCTION TRIM(receive-txn) " " FUNCTION TRIM(response-buffer) CR
+    DISPLAY
+       FUNCTION TRIM(receive-command) " "
+       FUNCTION TRIM(receive-txn) " "
+       FUNCTION TRIM(response-buffer) CR
+    END-DISPLAY
     .
 
 Read-Command-Exit.
