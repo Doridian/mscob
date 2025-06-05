@@ -79,9 +79,9 @@ Read-Command.
         GO TO READ-COMMAND-EXIT
     END-IF
 
-    MOVE " " TO receive-buffer-char(receive-len + 1)
+    MOVE SPACES TO receive-buffer(receive-len + 1:)
 
-    UNSTRING receive-buffer(1:receive-len) DELIMITED BY SPACE
+    UNSTRING receive-buffer DELIMITED BY SPACE
         INTO
             receive-command,
             receive-txn
@@ -95,7 +95,7 @@ Read-Command.
         WHEN receive-command = "VER"
             *> VER 0 MSNP8 CVR5
             PERFORM UNTIL receive-trailer-idx > receive-len
-                UNSTRING receive-buffer(1:receive-len) DELIMITED BY SPACE
+                UNSTRING receive-buffer DELIMITED BY SPACE
                     INTO receive-param
                     WITH POINTER receive-trailer-idx
                 END-UNSTRING
