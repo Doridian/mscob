@@ -11,12 +11,15 @@ WORKING-STORAGE SECTION.
 01 receive-buffer-array REDEFINES receive-buffer.
     05 receive-buffer-char OCCURS 65536 TIMES PIC X.
 01 receive-len BINARY-LONG UNSIGNED.
-01 receive-ptr PIC 9(8).
+01 temp-ptr PIC 9(8).
 
 01 response-buffer PIC X(65536).
 01 response-buffer-array REDEFINES response-buffer.
     05 response-buffer-char OCCURS 65536 TIMES PIC X.
 01 response-len BINARY-LONG UNSIGNED.
+
+*> 64 + 1" " + (3+1) + 1" " + 65536 + 3"\r\n\0" + 1 (margin)
+01 output-buffer PIC X(65610).
 
 01 receive-command PIC X(64).
 01 receive-txn PIC Z(3)9.
@@ -33,14 +36,24 @@ WORKING-STORAGE SECTION.
 01 LF PIC X(1) VALUE x'0A'.
 01 NUL PIC X(1) VALUE x'00'.
 01 stdin POINTER.
+01 stdout POINTER.
+01 stderr POINTER.
 
 *> Probably use CBL_GC_FORK to fork a listener for status updates after auth is completed
 *> PostgreSQL LISTEN?
 
 PROCEDURE DIVISION.
     CALL 'get_file' USING
-        BY VALUE 0 *> stdin
+        BY VALUE 0
         GIVING stdin
+    END-CALL
+    CALL 'get_file' USING
+        BY VALUE 1
+        GIVING stdout
+    END-CALL
+    CALL 'get_file' USING
+        BY VALUE 2
+        GIVING stderr
     END-CALL
 
     MOVE 1 TO connection-state
@@ -55,10 +68,10 @@ Read-Command.
         BY REFERENCE receive-buffer
         BY VALUE 65535 *> One less on purpose!
         BY VALUE stdin
-        GIVING receive-ptr
+        GIVING temp-ptr
     END-CALL
 
-    IF receive-ptr = 0
+    IF temp-ptr = 0
         GO TO READ-COMMAND-ERROR
     END-IF
 
@@ -122,10 +135,8 @@ Read-Command.
             END-IF
 
             STRING
-                "MSNP",
-                FUNCTION TRIM(msnp-version),
-                " CVR",
-                FUNCTION TRIM(cvr-version)
+                "MSNP" FUNCTION TRIM(msnp-version)
+                " CVR" FUNCTION TRIM(cvr-version)
                     DELIMITED BY SIZE
                 INTO response-buffer
             END-STRING
@@ -161,11 +172,24 @@ Read-Command.
     .
 
 Read-Command-Respond.
-    DISPLAY
-       FUNCTION TRIM(receive-command) " "
-       FUNCTION TRIM(receive-txn) " "
-       FUNCTION TRIM(response-buffer) CR
-    END-DISPLAY
+    STRING
+        FUNCTION TRIM(receive-command) " "
+        FUNCTION TRIM(receive-txn) " "
+        FUNCTION TRIM(response-buffer)
+        CR LF NUL
+           DELIMITED BY SIZE
+        INTO output-buffer
+    END-STRING
+
+    CALL 'fputs' USING
+        BY REFERENCE output-buffer
+        BY VALUE stdout
+        GIVING temp-ptr
+    END-CALL
+
+    IF temp-ptr < 0
+        GO TO READ-COMMAND-ERROR
+    END-IF
     .
 
 Read-Command-Return.
