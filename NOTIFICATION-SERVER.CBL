@@ -54,7 +54,7 @@ Read-Command.
 
     CALL 'fgets' USING
         BY REFERENCE receive-buffer
-        BY VALUE 65536
+        BY VALUE 65535 *> One less on purpose!
         BY VALUE stdin
         GIVING receive-ptr
     END-CALL
@@ -72,13 +72,14 @@ Read-Command.
                 receive-buffer-char(receive-len) NOT = LF AND
                 receive-buffer-char(receive-len) NOT = " "
             )
-        MOVE NUL TO receive-buffer-char(receive-len)
         SUBTRACT 1 FROM receive-len
     END-PERFORM
 
     IF receive-len < 1 THEN
         GO TO READ-COMMAND-EXIT
     END-IF
+
+    MOVE " " TO receive-buffer-char(receive-len + 1)
 
     UNSTRING receive-buffer(1:receive-len) DELIMITED BY SPACE
         INTO
