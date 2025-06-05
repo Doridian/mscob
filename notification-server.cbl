@@ -91,8 +91,8 @@ Read-Command.
     MOVE FUNCTION UPPER-CASE(receive-command) TO receive-command
     MOVE SPACES TO response-buffer
 
-    EVALUATE TRUE
-        WHEN receive-command = "VER"
+    EVALUATE receive-command
+        WHEN = "VER"
             *> VER 0 MSNP8 CVR5
             PERFORM UNTIL receive-trailer-idx > receive-len
                 UNSTRING receive-buffer DELIMITED BY SPACE
@@ -131,10 +131,10 @@ Read-Command.
                 INTO response-buffer
             END-STRING
 
-        WHEN receive-command = "CVR"
+        WHEN = "CVR"
             MOVE "1.0.0000 1.0.0000 1.0.0000 https://doridian.net https://doridian.net" TO response-buffer
 
-        WHEN receive-command = "TST"
+        WHEN = "TST"
             CALL 'fread' USING
                 BY REFERENCE response-buffer
                 BY VALUE 1
