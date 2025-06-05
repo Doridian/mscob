@@ -38,7 +38,6 @@ WORKING-STORAGE SECTION.
 *> PostgreSQL LISTEN?
 
 PROCEDURE DIVISION.
-Main.
     CALL 'get_file' USING
         BY VALUE 0 *> stdin
         GIVING stdin
