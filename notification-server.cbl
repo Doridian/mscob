@@ -44,7 +44,7 @@ PROCEDURE DIVISION.
     END-CALL
 
     MOVE 1 TO connection-state
-    PERFORM READ-COMMAND THRU READ-COMMAND-EXIT UNTIL connection-state = 0
+    PERFORM READ-COMMAND THRU READ-COMMAND-RETURN UNTIL connection-state = 0
     STOP RUN
     .
 
@@ -75,7 +75,7 @@ Read-Command.
     END-PERFORM
 
     IF receive-len < 1 THEN
-        GO TO READ-COMMAND-EXIT
+        GO TO READ-COMMAND-RETURN
     END-IF
 
     MOVE SPACES TO receive-buffer(receive-len + 1:)
@@ -145,7 +145,7 @@ Read-Command.
             MOVE SPACES TO response-buffer(response-len:)
 
             DISPLAY "Got " response-len " chars"
-            GO TO READ-COMMAND-EXIT
+            GO TO READ-COMMAND-RETURN
 
         WHEN OTHER
             STRING
@@ -168,7 +168,7 @@ Read-Command-Respond.
     END-DISPLAY
     .
 
-Read-Command-Exit.
+Read-Command-Return.
 
 Read-Command-Error.
     MOVE 0 TO connection-state
