@@ -1,8 +1,6 @@
 #include <unistd.h>
 #include <stdio.h>
 
-extern "C" {
-
 FILE* get_file(const int fileno) {
     switch (fileno) {
         case STDIN_FILENO:
@@ -13,7 +11,5 @@ FILE* get_file(const int fileno) {
             return stderr;
     }
 
-    return nullptr;
-}
-
+    return NULL;
 }
