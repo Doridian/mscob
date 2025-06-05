@@ -1,4 +1,4 @@
-        >>SOURCE FORMAT FREE
+      $set sourceformat(free)
 IDENTIFICATION DIVISION.
 PROGRAM-ID. NOTIFICATION-SERVER.
 
