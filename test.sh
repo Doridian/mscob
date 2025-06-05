@@ -7,7 +7,7 @@ export COB_LDFLAGS=-Wl,--no-as-needed
 rm -f NOTIFICATION-SERVER SWITCHBOARD-SERVER
 
 
-cobc -O2 -x NOTIFICATION-SERVER.CBL files.c -o NOTIFICATION-SERVER
-#socat TCP-LISTEN:1863,reuseaddr,fork EXEC:"./NOTIFICATION-SERVER"
+cobc -O2 -x notification-server.cbl files.c -o notification-server
+#socat TCP-LISTEN:1863,reuseaddr,fork EXEC:"./notification-server"
 stty cbreak
-./NOTIFICATION-SERVER
+./notification-server
