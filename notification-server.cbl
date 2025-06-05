@@ -33,9 +33,11 @@ WORKING-STORAGE SECTION.
 
 01 connection-state BINARY-INT UNSIGNED.
 
-01 CR PIC X(1) VALUE x'0D'.
-01 LF PIC X(1) VALUE x'0A'.
-01 NUL PIC X(1) VALUE x'00'.
+01 CRLUFNUL.
+       03 CR PIC X(1) VALUE x'0D'.
+       03 LF PIC X(1) VALUE x'0A'.
+       03 NUL PIC X(1) VALUE x'00'.
+
 01 stdin POINTER.
 01 stdout POINTER.
 01 stderr POINTER.
@@ -177,7 +179,7 @@ Read-Command-Respond.
         FUNCTION TRIM(receive-command) " "
         FUNCTION TRIM(receive-txn) " "
         FUNCTION TRIM(response-buffer)
-        CR LF NUL
+        CRLUFNUL
            DELIMITED BY SIZE
         INTO output-buffer
     END-STRING
