@@ -11,7 +11,8 @@ WORKING-STORAGE SECTION.
 01 receive-buffer-array REDEFINES receive-buffer.
     05 receive-buffer-char OCCURS 65536 TIMES PIC X.
 01 receive-len BINARY-LONG UNSIGNED.
-01 temp-ptr PIC 9(8) BINARY.
+01 temp-ptr POINTER.
+01 temp-int REDEFINES temp-ptr BINARY-INT.
 
 01 response-buffer PIC X(65536).
 01 response-buffer-array REDEFINES response-buffer.
@@ -71,7 +72,7 @@ Read-Command.
         GIVING temp-ptr
     END-CALL
 
-    IF temp-ptr = 0
+    IF temp-ptr = NULL
         GO TO READ-COMMAND-ERROR
     END-IF
 
@@ -184,10 +185,10 @@ Read-Command-Respond.
     CALL 'fputs' USING
         BY REFERENCE output-buffer
         BY VALUE stdout
-        GIVING temp-ptr
+        GIVING temp-int
     END-CALL
 
-    IF temp-ptr < 0
+    IF temp-int < 0
         GO TO READ-COMMAND-ERROR
     END-IF
     .
