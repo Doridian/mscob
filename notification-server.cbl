@@ -11,14 +11,14 @@ WORKING-STORAGE SECTION.
 01 receive-buffer-array REDEFINES receive-buffer.
     05 receive-buffer-char OCCURS 65536 TIMES PIC X.
 01 receive-len BINARY-LONG UNSIGNED.
-01 temp-ptr POINTER.
-01 temp-int REDEFINES temp-ptr BINARY-INT.
 
 01 response-buffer PIC X(65536).
 01 response-buffer-array REDEFINES response-buffer.
     05 response-buffer-char OCCURS 65536 TIMES PIC X.
 01 response-len BINARY-LONG UNSIGNED.
 
+01 temp-ptr POINTER.
+01 temp-int REDEFINES temp-ptr BINARY-INT.
 *> 64 + 1" " + (3+1) + 1" " + 65536 + 3"\r\n\0" + 1 (margin)
 01 output-buffer PIC X(65610).
 
