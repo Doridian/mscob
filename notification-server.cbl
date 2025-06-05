@@ -11,7 +11,7 @@ WORKING-STORAGE SECTION.
 01 receive-buffer-array REDEFINES receive-buffer.
     05 receive-buffer-char OCCURS 65536 TIMES PIC X.
 01 receive-len BINARY-LONG UNSIGNED.
-01 temp-ptr PIC 9(8).
+01 temp-ptr PIC 9(8) BINARY.
 
 01 response-buffer PIC X(65536).
 01 response-buffer-array REDEFINES response-buffer.
