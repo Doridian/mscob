@@ -55,6 +55,7 @@ WORKING-STORAGE SECTION.
 01 user-challenge-array REDEFINES user-challenge.
    05 user-challenge-char OCCURS 16 TIMES PIC X.
 01 user-handle PIC X(256).
+01 user-password PIC X(256).
 
 01 stdin POINTER.
 01 stdout POINTER.
@@ -204,6 +205,7 @@ Read-Command.
                         GO TO READ-COMMAND-ERROR
                     END-IF
 
+                    MOVE "test" TO user-password
                     PERFORM Generate-Challenge
 
                     STRING
@@ -220,6 +222,8 @@ Read-Command.
                         MOVE "200" TO receive-command
                         GO TO READ-COMMAND-ERROR
                     END-IF
+
+                    *> TODO: MD5 and stuff
 
                     MOVE 5 TO connection-state
 
