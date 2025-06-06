@@ -5,6 +5,23 @@ PROGRAM-ID. NOTIFICATION-SERVER.
 DATA DIVISION.
 WORKING-STORAGE SECTION.
 
+01 C-ALL-CHARS.
+   05 C-LOWER-ALPHA PIC X(26)
+       VALUE "abcdefghijklmnopqrstuvwxyz".
+   05 C-UPPER-ALPHA PIC X(26)
+       VALUE "ABCDEFGHIJKLMNOPQRSTUVWXYZ".
+   05 C-NUMERIC PIC X(10)
+       VALUE "0123456789".
+   05 C-SPECIAL PIC X(8)
+       VALUE "()[]{}!$".
+01 C-CHARS-ARRAY REDEFINES C-ALL-CHARS.
+   05 C-CHARS-INDEX OCCURS 70 TIMES PIC X.
+
+01 CR_LF_NUL.
+    05 CR PIC X(1) VALUE x'0D'.
+    05 LF PIC X(1) VALUE x'0A'.
+    05 NUL PIC X(1) VALUE x'00'.
+
 01 receive-buffer PIC X(65536).
 01 receive-buffer-array REDEFINES receive-buffer.
     05 receive-buffer-char OCCURS 65536 TIMES PIC X.
@@ -16,7 +33,8 @@ WORKING-STORAGE SECTION.
 01 response-len BINARY-LONG UNSIGNED.
 
 01 temp-ptr POINTER.
-01 temp-int REDEFINES temp-ptr BINARY-INT.
+01 temp-int BINARY-INT.
+01 temp-int-2 BINARY-INT.
 *> 64 + 1" " + (3+1) + 1" " + 65536 + 3"\r\n\0" + 1 (margin)
 01 output-buffer PIC X(65610).
 
@@ -25,16 +43,18 @@ WORKING-STORAGE SECTION.
 01 receive-trailer-idx BINARY-INT UNSIGNED.
 
 01 receive-param PIC X(256).
+01 receive-param-2 PIC X(256).
 
 01 msnp-version PIC Z(3)9 VALUE 9999.
 01 cvr-version PIC Z(3)9 VALUE 9999.
 
 01 connection-state BINARY-INT UNSIGNED.
+*> 0 = closed, 1 = need-ver, 2 = need-cvr, 3 = need-usr-i, 4 = need-usr-s, 5 = authed/ready
 
-01 CR_LF_NUL.
-    05 CR PIC X(1) VALUE x'0D'.
-    05 LF PIC X(1) VALUE x'0A'.
-    05 NUL PIC X(1) VALUE x'00'.
+01 user-challenge PIC X(16).
+01 user-challenge-array REDEFINES user-challenge.
+   05 user-challenge-char OCCURS 16 TIMES PIC X.
+01 user-handle PIC X(256).
 
 01 stdin POINTER.
 01 stdout POINTER.
@@ -101,11 +121,15 @@ Read-Command.
         WITH POINTER receive-trailer-idx
     END-UNSTRING
 
-    MOVE FUNCTION UPPER-CASE(receive-command) TO receive-command
     MOVE SPACES TO response-buffer
 
     EVALUATE receive-command
         WHEN = "VER"
+            IF connection-state NOT = 1
+                MOVE "200" TO receive-command
+                GO TO READ-COMMAND-ERROR
+            END-IF
+
             *> VER 0 MSNP8 CVR5
             PERFORM UNTIL receive-trailer-idx > receive-len
                 UNSTRING receive-buffer DELIMITED BY SPACE
@@ -142,8 +166,68 @@ Read-Command.
                 INTO response-buffer
             END-STRING
 
+            MOVE 2 TO connection-state
+
         WHEN = "CVR"
+            IF connection-state NOT = 2
+                MOVE "200" TO receive-command
+                GO TO READ-COMMAND-ERROR
+            END-IF
+
             MOVE "1.0.0000 1.0.0000 1.0.0000 https://doridian.net https://doridian.net" TO response-buffer
+
+            MOVE 3 TO connection-state
+
+        WHEN = "USR"
+            UNSTRING receive-buffer DELIMITED BY SPACE
+                INTO receive-param, receive-param-2
+                WITH POINTER receive-trailer-idx
+            END-UNSTRING
+
+            IF receive-param NOT = "MD5"
+                MOVE "200" TO receive-command
+                GO TO READ-COMMAND-ERROR
+            END-IF
+
+            EVALUATE connection-state
+                WHEN = 3
+                    IF receive-param-2(1:1) NOT = "I"
+                        MOVE "Expected 'I' in USR command" TO response-buffer
+                        MOVE "200" TO receive-command
+                        GO TO READ-COMMAND-ERROR
+                    END-IF
+
+                    MOVE receive-param-2(2:) TO user-handle
+                    IF FUNCTION TRIM(user-handle) = SPACES
+                        MOVE "Empty user handle in USR command" TO response-buffer
+                        MOVE "200" TO receive-command
+                        GO TO READ-COMMAND-ERROR
+                    END-IF
+
+                    PERFORM Generate-Challenge
+
+                    STRING
+                        "MD5 S" DELIMITED BY SIZE
+                        user-challenge DELIMITED BY SPACE
+                        INTO response-buffer
+                    END-STRING
+
+                    MOVE 4 TO connection-state
+
+                WHEN = 4
+                    IF receive-param(1:1) NOT = "S"
+                        MOVE "Expected 'S' in USR command" TO response-buffer
+                        MOVE "200" TO receive-command
+                        GO TO READ-COMMAND-ERROR
+                    END-IF
+
+                    MOVE 5 TO connection-state
+
+                WHEN OTHER
+                    MOVE "Unexpected USR command" TO response-buffer
+                    MOVE "200" TO receive-command
+                    GO TO READ-COMMAND-ERROR
+            END-EVALUATE
 
         WHEN = "TST"
             CALL 'fread' USING
@@ -200,6 +284,14 @@ Read-Command-Error.
     IF response-buffer NOT = SPACES
         GO TO READ-COMMAND-RESPOND
     END-IF
+    .
+
+Generate-Challenge.
+    PERFORM VARYING temp-int-2 FROM 1 BY 1
+            UNTIL temp-int-2 > 16
+        COMPUTE temp-int = (FUNCTION RANDOM * 69) + 1
+        MOVE C-CHARS-INDEX(temp-int) TO user-challenge-char(temp-int-2)
+    END-PERFORM
     .
 
 END PROGRAM NOTIFICATION-SERVER.
