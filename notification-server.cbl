@@ -189,7 +189,7 @@ Read-Command.
                     END-IF
 
                     MOVE "test" TO user-password
-                    PERFORM Generate-Challenge
+                    PERFORM Generate-MD5-Challenge
                 WHEN OTHER
                     STRING
                         "Unsupported security package '"
@@ -308,7 +308,7 @@ USR-Command-Parse.
     END-UNSTRING
     .
 
-Generate-Challenge.
+Generate-MD5-Challenge.
     PERFORM VARYING temp-int-2 FROM 1 BY 1
             UNTIL temp-int-2 > 16
         COMPUTE temp-int = (FUNCTION RANDOM * 69) + 1
