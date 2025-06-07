@@ -189,7 +189,11 @@ Read-Command.
                     END-IF
 
                     MOVE "test" TO user-password
-                    PERFORM Generate-MD5-Challenge
+                    PERFORM VARYING temp-int-2 FROM 1 BY 1
+                            UNTIL temp-int-2 > 16
+                        COMPUTE temp-int = (FUNCTION RANDOM * 69) + 1
+                        MOVE C-CHARS-INDEX(temp-int) TO user-challenge-char(temp-int-2)
+                    END-PERFORM
                 WHEN OTHER
                     STRING
                         "Unsupported security package '"
@@ -306,14 +310,6 @@ USR-Command-Parse.
         INTO receive-param, receive-param-2
         WITH POINTER receive-trailer-idx
     END-UNSTRING
-    .
-
-Generate-MD5-Challenge.
-    PERFORM VARYING temp-int-2 FROM 1 BY 1
-            UNTIL temp-int-2 > 16
-        COMPUTE temp-int = (FUNCTION RANDOM * 69) + 1
-        MOVE C-CHARS-INDEX(temp-int) TO user-challenge-char(temp-int-2)
-    END-PERFORM
     .
 
 END PROGRAM NOTIFICATION-SERVER.
