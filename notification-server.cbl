@@ -124,13 +124,8 @@ Read-Command.
 
     MOVE SPACES TO response-buffer
 
-    EVALUATE receive-command
-        WHEN = "VER"
-            IF connection-state NOT = 1
-                MOVE "200" TO receive-command
-                GO TO READ-COMMAND-ERROR
-            END-IF
-
+    EVALUATE receive-command ALSO connection-state
+        WHEN "VER" ALSO 1
             *> VER 0 MSNP8 CVR5
             PERFORM UNTIL receive-trailer-idx > receive-len
                 UNSTRING receive-buffer DELIMITED BY SPACE
@@ -169,71 +164,51 @@ Read-Command.
 
             MOVE 2 TO connection-state
 
-        WHEN = "CVR"
-            IF connection-state NOT = 2
-                MOVE "200" TO receive-command
-                GO TO READ-COMMAND-ERROR
-            END-IF
-
+        WHEN "CVR" ALSO 2
             MOVE "1.0.0000 1.0.0000 1.0.0000 https://doridian.net https://doridian.net" TO response-buffer
 
             MOVE 3 TO connection-state
 
-        WHEN = "USR"
-            UNSTRING receive-buffer DELIMITED BY SPACE
-                INTO receive-param, receive-param-2
-                WITH POINTER receive-trailer-idx
-            END-UNSTRING
+        WHEN "USR" ALSO 3
+            PERFORM USR-COMMAND-PARSE
 
-            IF receive-param NOT = "MD5"
+            IF receive-param-2(1:1) NOT = "I"
+                MOVE "Expected 'I' in USR command" TO response-buffer
                 MOVE "200" TO receive-command
                 GO TO READ-COMMAND-ERROR
             END-IF
 
-            EVALUATE connection-state
-                WHEN = 3
-                    IF receive-param-2(1:1) NOT = "I"
-                        MOVE "Expected 'I' in USR command" TO response-buffer
-                        MOVE "200" TO receive-command
-                        GO TO READ-COMMAND-ERROR
-                    END-IF
+            MOVE receive-param-2(2:) TO user-handle
+            IF FUNCTION TRIM(user-handle) = SPACES
+                MOVE "Empty user handle in USR command" TO response-buffer
+                MOVE "200" TO receive-command
+                GO TO READ-COMMAND-ERROR
+            END-IF
 
-                    MOVE receive-param-2(2:) TO user-handle
-                    IF FUNCTION TRIM(user-handle) = SPACES
-                        MOVE "Empty user handle in USR command" TO response-buffer
-                        MOVE "200" TO receive-command
-                        GO TO READ-COMMAND-ERROR
-                    END-IF
+            MOVE "test" TO user-password
+            PERFORM Generate-Challenge
 
-                    MOVE "test" TO user-password
-                    PERFORM Generate-Challenge
+            STRING
+                "MD5 S" DELIMITED BY SIZE
+                user-challenge DELIMITED BY SPACE
+                INTO response-buffer
+            END-STRING
 
-                    STRING
-                        "MD5 S" DELIMITED BY SIZE
-                        user-challenge DELIMITED BY SPACE
-                        INTO response-buffer
-                    END-STRING
+            MOVE 4 TO connection-state
 
-                    MOVE 4 TO connection-state
+        WHEN "USR" ALSO 4
+            PERFORM USR-COMMAND-PARSE
+            IF receive-param(1:1) NOT = "S"
+                MOVE "Expected 'S' in USR command" TO response-buffer
+                MOVE "200" TO receive-command
+                GO TO READ-COMMAND-ERROR
+            END-IF
 
-                WHEN = 4
-                    IF receive-param(1:1) NOT = "S"
-                        MOVE "Expected 'S' in USR command" TO response-buffer
-                        MOVE "200" TO receive-command
-                        GO TO READ-COMMAND-ERROR
-                    END-IF
+            *> TODO: MD5 and stuff
 
-                    *> TODO: MD5 and stuff
+            MOVE 5 TO connection-state
 
-                    MOVE 5 TO connection-state
-
-                WHEN OTHER
-                    MOVE "Unexpected USR command" TO response-buffer
-                    MOVE "200" TO receive-command
-                    GO TO READ-COMMAND-ERROR
-            END-EVALUATE
-
-        WHEN = "TST"
+        WHEN "TST" ALSO > 0
             CALL 'fread' USING
                 BY REFERENCE response-buffer
                 BY VALUE 1
@@ -287,6 +262,18 @@ Read-Command-Error.
     MOVE 0 TO connection-state
     IF response-buffer NOT = SPACES
         GO TO READ-COMMAND-RESPOND
+    END-IF
+    .
+
+USR-Command-Parse.
+    UNSTRING receive-buffer DELIMITED BY SPACE
+        INTO receive-param, receive-param-2
+        WITH POINTER receive-trailer-idx
+    END-UNSTRING
+
+    IF receive-param NOT = "MD5"
+        MOVE "200" TO receive-command
+        GO TO READ-COMMAND-ERROR
     END-IF
     .
 
