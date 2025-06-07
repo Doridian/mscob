@@ -49,12 +49,13 @@ WORKING-STORAGE SECTION.
 01 cvr-version PIC Z(3)9 VALUE 9999.
 
 01 connection-state BINARY-INT UNSIGNED.
-*> 0 = closed, 1 = need-ver, 2 = need-cvr, 3 = need-usr-i, 4 = need-usr-s, 5 = authed/ready
+*> 0 = closed, 1 = need-ver, 2 = need-cvr, 3 = in-auth, 4 = authed/ready
 
 01 user-challenge PIC X(16).
 01 user-challenge-array REDEFINES user-challenge.
    05 user-challenge-char OCCURS 16 TIMES PIC X.
 01 user-handle PIC X(256).
+01 user-nickname PIC X(256).
 01 user-password PIC X(256).
 01 security-package PIC X(256).
 
@@ -171,82 +172,124 @@ Read-Command.
             MOVE 3 TO connection-state
 
         WHEN "USR" ALSO 3
-            PERFORM USR-COMMAND-PARSE
+            UNSTRING receive-buffer DELIMITED BY SPACE
+                INTO receive-param, receive-param-2
+                WITH POINTER receive-trailer-idx
+            END-UNSTRING
 
-            IF receive-param-2(1:1) NOT = "I"
-                MOVE "Expected 'I' in USR command" TO response-buffer
-                MOVE "200" TO receive-command
-                GO TO READ-COMMAND-ERROR
-            END-IF
+            EVALUATE receive-param-2(1:1)
+                WHEN "I"
+                    EVALUATE receive-param
+                        WHEN "MD5"
+                            MOVE receive-param-2(2:) TO user-handle
+                            IF FUNCTION TRIM(user-handle) = SPACES
+                                MOVE "Empty user handle in USR command" TO response-buffer
+                                MOVE "200" TO receive-command
+                                GO TO READ-COMMAND-ERROR
+                            END-IF
 
-            EVALUATE receive-param
-                WHEN "MD5"
-                    MOVE receive-param-2(2:) TO user-handle
-                    IF FUNCTION TRIM(user-handle) = SPACES
-                        MOVE "Empty user handle in USR command" TO response-buffer
+                            *> TODO: Load actual password and nickname
+                            MOVE user-handle TO user-nickname
+                            MOVE "test" TO user-password
+                            PERFORM VARYING temp-int-2 FROM 1 BY 1
+                                    UNTIL temp-int-2 > 16
+                                COMPUTE temp-int = (FUNCTION RANDOM * 69) + 1
+                                MOVE C-CHARS-INDEX(temp-int) TO user-challenge-char(temp-int-2)
+                            END-PERFORM
+                        WHEN OTHER
+                            STRING
+                                "Unsupported security package '"
+                                FUNCTION TRIM(receive-param)
+                                "' in USR I command"
+                                    DELIMITED BY SIZE
+                                INTO response-buffer
+                            END-STRING
+                            MOVE "200" TO receive-command
+                            GO TO READ-COMMAND-ERROR
+                    END-EVALUATE
+
+                    MOVE receive-param TO security-package
+                    STRING
+                        security-package DELIMITED BY SPACE
+                        " S" DELIMITED BY SIZE
+                        user-challenge DELIMITED BY SPACE
+                        INTO response-buffer
+                    END-STRING
+
+                WHEN "S"
+                    IF security-package = SPACES
+                        MOVE "Expected USR I before USR S" TO response-buffer
                         MOVE "200" TO receive-command
                         GO TO READ-COMMAND-ERROR
                     END-IF
 
-                    MOVE "test" TO user-password
-                    PERFORM VARYING temp-int-2 FROM 1 BY 1
-                            UNTIL temp-int-2 > 16
-                        COMPUTE temp-int = (FUNCTION RANDOM * 69) + 1
-                        MOVE C-CHARS-INDEX(temp-int) TO user-challenge-char(temp-int-2)
-                    END-PERFORM
-                WHEN OTHER
-                    STRING
-                        "Unsupported security package '"
-                        FUNCTION TRIM(receive-param)
-                        "' in USR I command"
-                            DELIMITED BY SIZE
-                        INTO response-buffer
-                    END-STRING
-                    MOVE "200" TO receive-command
-                    GO TO READ-COMMAND-ERROR
+                    IF receive-param NOT = security-package
+                        STRING
+                            "Expected security package '"
+                            FUNCTION TRIM(security-package)
+                            "' in USR S command"
+                                DELIMITED BY SIZE
+                            INTO response-buffer
+                        END-STRING
+                        MOVE "200" TO receive-command
+                        GO TO READ-COMMAND-ERROR
+                    END-IF
+
+                    EVALUATE security-package
+                        WHEN "MD5"
+                            MOVE 1 TO temp-int
+                            STRING
+                                user-password
+                                user-challenge
+                                    DELIMITED BY SPACE
+                                NUL DELIMITED BY SIZE
+                                INTO output-buffer
+                                WITH POINTER temp-int
+                            END-STRING
+
+                            SUBTRACT 2 FROM temp-int
+
+                            CALL 'MD5' USING
+                                BY REFERENCE output-buffer
+                                BY VALUE temp-int
+                                BY REFERENCE user-password
+                            END-CALL
+
+                            IF FUNCTION UPPER-CASE(receive-param-2(2:)) NOT =
+                                    FUNCTION HEX-OF(user-password(1:16))
+                                MOVE "Invalid password" TO response-buffer
+                                MOVE "900" TO receive-command
+                                GO TO READ-COMMAND-ERROR
+                            END-IF
+
+                            MOVE SPACES TO user-password
+                            MOVE SPACES TO security-package
+
+                            STRING
+                                "OK " DELIMITED BY SIZE
+                                user-handle DELIMITED BY SPACE
+                                " " DELIMITED BY SIZE
+                                user-nickname DELIMITED BY SPACE
+                                INTO response-buffer
+                            END-STRING
+                            MOVE 4 TO connection-state
+                        WHEN OTHER
+                            STRING
+                                "Unsupported security package '"
+                                FUNCTION TRIM(receive-param)
+                                "' in USR S command"
+                                    DELIMITED BY SIZE
+                                INTO response-buffer
+                            END-STRING
+                            MOVE "200" TO receive-command
+                            GO TO READ-COMMAND-ERROR
+                    END-EVALUATE
+
+                    WHEN OTHER
+                        MOVE "Unsupported USR command" TO response-buffer
+                        MOVE "200" TO receive-command
+                        GO TO READ-COMMAND-ERROR
             END-EVALUATE
-
-            MOVE receive-param TO security-package
-            STRING
-                security-package DELIMITED BY SPACE
-                " S" DELIMITED BY SIZE
-                user-challenge DELIMITED BY SPACE
-                INTO response-buffer
-            END-STRING
-            MOVE 4 TO connection-state
-
-        WHEN "USR" ALSO 4
-            PERFORM USR-COMMAND-PARSE
-
-            IF receive-param(1:1) NOT = "S"
-                MOVE "Expected 'S' in USR command" TO response-buffer
-                MOVE "200" TO receive-command
-                GO TO READ-COMMAND-ERROR
-            END-IF
-
-            IF receive-param NOT = security-package
-                STRING
-                    "Expected security package '"
-                    FUNCTION TRIM(security-package)
-                    "' in USR S command"
-                        DELIMITED BY SIZE
-                    INTO response-buffer
-                END-STRING
-                MOVE "200" TO receive-command
-                GO TO READ-COMMAND-ERROR
-            END-IF
-
-            EVALUATE security-package
-                WHEN "MD5"
-                    *> TODO: MD5 and stuff
-                    CONTINUE
-                WHEN OTHER
-                    DISPLAY "Internal error: Selected unimplemented security package '"
-                        FUNCTION TRIM(security-package) "'" UPON SYSERR
-                    STOP RUN
-            END-EVALUATE
-
-            MOVE 5 TO connection-state
 
         WHEN "TST" ALSO > 0
             CALL 'fread' USING
@@ -303,13 +346,6 @@ Read-Command-Error.
     IF response-buffer NOT = SPACES
         GO TO READ-COMMAND-RESPOND
     END-IF
-    .
-
-USR-Command-Parse.
-    UNSTRING receive-buffer DELIMITED BY SPACE
-        INTO receive-param, receive-param-2
-        WITH POINTER receive-trailer-idx
-    END-UNSTRING
     .
 
 END PROGRAM NOTIFICATION-SERVER.
