@@ -257,6 +257,8 @@ Read-Command.
 
                             IF FUNCTION UPPER-CASE(receive-param-2(2:)) NOT =
                                     FUNCTION HEX-OF(user-password(1:16))
+                                MOVE SPACES TO user-password
+                                MOVE SPACES TO security-package
                                 MOVE "Invalid password" TO response-buffer
                                 MOVE "900" TO receive-command
                                 GO TO READ-COMMAND-ERROR
