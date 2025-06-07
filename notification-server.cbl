@@ -56,6 +56,7 @@ WORKING-STORAGE SECTION.
    05 user-challenge-char OCCURS 16 TIMES PIC X.
 01 user-handle PIC X(256).
 01 user-password PIC X(256).
+01 security-package PIC X(256).
 
 01 stdin POINTER.
 01 stdout POINTER.
@@ -178,33 +179,68 @@ Read-Command.
                 GO TO READ-COMMAND-ERROR
             END-IF
 
-            MOVE receive-param-2(2:) TO user-handle
-            IF FUNCTION TRIM(user-handle) = SPACES
-                MOVE "Empty user handle in USR command" TO response-buffer
-                MOVE "200" TO receive-command
-                GO TO READ-COMMAND-ERROR
-            END-IF
+            EVALUATE receive-param
+                WHEN "MD5"
+                    MOVE receive-param-2(2:) TO user-handle
+                    IF FUNCTION TRIM(user-handle) = SPACES
+                        MOVE "Empty user handle in USR command" TO response-buffer
+                        MOVE "200" TO receive-command
+                        GO TO READ-COMMAND-ERROR
+                    END-IF
 
-            MOVE "test" TO user-password
-            PERFORM Generate-Challenge
+                    MOVE "test" TO user-password
+                    PERFORM Generate-Challenge
+                WHEN OTHER
+                    STRING
+                        "Unsupported security package '"
+                        FUNCTION TRIM(receive-param)
+                        "' in USR I command"
+                            DELIMITED BY SIZE
+                        INTO response-buffer
+                    END-STRING
+                    MOVE "200" TO receive-command
+                    GO TO READ-COMMAND-ERROR
+            END-EVALUATE
 
+            MOVE receive-param TO security-package
             STRING
-                "MD5 S" DELIMITED BY SIZE
+                security-package DELIMITED BY SPACE
+                " S" DELIMITED BY SIZE
                 user-challenge DELIMITED BY SPACE
                 INTO response-buffer
             END-STRING
-
             MOVE 4 TO connection-state
 
         WHEN "USR" ALSO 4
             PERFORM USR-COMMAND-PARSE
+
             IF receive-param(1:1) NOT = "S"
                 MOVE "Expected 'S' in USR command" TO response-buffer
                 MOVE "200" TO receive-command
                 GO TO READ-COMMAND-ERROR
             END-IF
 
-            *> TODO: MD5 and stuff
+            IF receive-param NOT = security-package
+                STRING
+                    "Expected security package '"
+                    FUNCTION TRIM(security-package)
+                    "' in USR S command"
+                        DELIMITED BY SIZE
+                    INTO response-buffer
+                END-STRING
+                MOVE "200" TO receive-command
+                GO TO READ-COMMAND-ERROR
+            END-IF
+
+            EVALUATE security-package
+                WHEN "MD5"
+                    *> TODO: MD5 and stuff
+                    CONTINUE
+                WHEN OTHER
+                    DISPLAY "Internal error: Selected unimplemented security package '"
+                        FUNCTION TRIM(security-package) "'" UPON SYSERR
+                    STOP RUN
+            END-EVALUATE
 
             MOVE 5 TO connection-state
 
@@ -224,7 +260,7 @@ Read-Command.
 
         WHEN OTHER
             STRING
-                "Invalid command '"
+                "Invalid/unexpcted command '"
                 FUNCTION TRIM(receive-command)
                 "'"
                     DELIMITED BY SIZE
@@ -259,7 +295,7 @@ Read-Command-Respond.
 Read-Command-Return.
 
 Read-Command-Error.
-    MOVE 0 TO connection-state
+    *>MOVE 0 TO connection-state
     IF response-buffer NOT = SPACES
         GO TO READ-COMMAND-RESPOND
     END-IF
@@ -270,11 +306,6 @@ USR-Command-Parse.
         INTO receive-param, receive-param-2
         WITH POINTER receive-trailer-idx
     END-UNSTRING
-
-    IF receive-param NOT = "MD5"
-        MOVE "200" TO receive-command
-        GO TO READ-COMMAND-ERROR
-    END-IF
     .
 
 Generate-Challenge.
